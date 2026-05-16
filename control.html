@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Regie Timer Control</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="control-body">
+  <div class="panel">
+    <h1>Regie Timer Control</h1>
+    <div class="small">
+      Raum: <b id="roomName"></b><br>
+      OBS-Link: <code>overlay.html?room=DEINRAUM</code> &nbsp; | &nbsp;
+      Regie-Link: <code>control.html?room=DEINRAUM</code>
+    </div>
+
+    <div class="preview">
+      <div id="timerBox" class="timer-wrap">
+        <div>
+          <div id="label" class="label">Redezeit</div>
+          <div id="sub" class="status">Bereit</div>
+        </div>
+        <div id="time" class="time">02:00</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <button onclick="startTimer()">Start</button>
+      <button class="gold" onclick="pauseTimer()">Pause</button>
+      <button class="danger" onclick="resetTimer()">Reset</button>
+    </div>
+
+    <div class="row">
+      <input id="minutes" type="number" min="1" max="60" value="2" />
+      <button onclick="setMinutes()">Minuten setzen</button>
+    </div>
+
+    <div class="row">
+      <button onclick="adjust(-10)">-10 Sek</button>
+      <button onclick="adjust(10)">+10 Sek</button>
+      <button onclick="adjust(-60)">-1 Min</button>
+      <button onclick="adjust(60)">+1 Min</button>
+    </div>
+
+    <p class="small">
+      Tipp: Verwende für jede Sitzung einen eigenen Raum, z. B.
+      <code>?room=ijtema2026</code>. Den Overlay-Link in OBS einfügen,
+      den Control-Link auf Laptop/Handy öffnen.
+    </p>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="shared.js"></script>
+  <script>
+    document.getElementById("roomName").textContent = getRoom();
+
+    const box = document.getElementById("timerBox");
+    const label = document.getElementById("label");
+    const sub = document.getElementById("sub");
+    const timeEl = document.getElementById("time");
+    let latestState = null;
+
+    function render() {
+      if (!latestState) return;
+      const remaining = calcRemaining(latestState);
+      timeEl.textContent = formatTime(remaining);
+
+      if (remaining < 0) {
+        box.classList.add("over");
+        label.textContent = "Überzogen";
+        sub.textContent = "Redezeit überschritten";
+      } else {
+        box.classList.remove("over");
+        label.textContent = "Redezeit";
+        sub.textContent = latestState.running ? "läuft" : "pausiert / bereit";
+      }
+    }
+
+    ensureState().then(() => {
+      refForRoom().on("value", snap => {
+        latestState = snap.val() || defaultState();
+        document.getElementById("minutes").value = Math.round((latestState.duration || 120) / 60);
+        render();
+      });
+    });
+
+    setInterval(render, 250);
+
+    async function startTimer() {
+      const state = latestState || defaultState();
+      const remaining = calcRemaining(state);
+      await refForRoom().update({
+        running: true,
+        startedAt: now(),
+        baseRemaining: remaining,
+        remaining: remaining,
+        updatedAt: now()
+      });
+    }
+
+    async function pauseTimer() {
+      const state = latestState || defaultState();
+      const remaining = calcRemaining(state);
+      await refForRoom().update({
+        running: false,
+        startedAt: null,
+        baseRemaining: remaining,
+        remaining: remaining,
+        updatedAt: now()
+      });
+    }
+
+    async function resetTimer() {
+      const state = latestState || defaultState();
+      const duration = Number(state.duration || 120);
+      await refForRoom().update({
+        running: false,
+        startedAt: null,
+        baseRemaining: duration,
+        remaining: duration,
+        updatedAt: now()
+      });
+    }
+
+    async function setMinutes() {
+      const minutes = Math.max(1, Number(document.getElementById("minutes").value || 2));
+      const seconds = minutes * 60;
+      await refForRoom().update({
+        duration: seconds,
+        remaining: seconds,
+        baseRemaining: seconds,
+        running: false,
+        startedAt: null,
+        updatedAt: now()
+      });
+    }
+
+    async function adjust(sec) {
+      const state = latestState || defaultState();
+      const remaining = calcRemaining(state) + sec;
+      await refForRoom().update({
+        running: false,
+        startedAt: null,
+        baseRemaining: remaining,
+        remaining: remaining,
+        updatedAt: now()
+      });
+    }
+  </script>
+</body>
+</html>

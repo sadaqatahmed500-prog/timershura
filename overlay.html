@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>OBS Timer Overlay</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="timerBox" class="timer-wrap">
+    <div>
+      <div id="label" class="label">Redezeit</div>
+      <div id="sub" class="status">Bereit</div>
+    </div>
+    <div id="time" class="time">02:00</div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="shared.js"></script>
+  <script>
+    const box = document.getElementById("timerBox");
+    const label = document.getElementById("label");
+    const sub = document.getElementById("sub");
+    const timeEl = document.getElementById("time");
+    let latestState = null;
+
+    function render() {
+      if (!latestState) return;
+      const remaining = calcRemaining(latestState);
+      timeEl.textContent = formatTime(remaining);
+
+      if (remaining < 0) {
+        box.classList.add("over");
+        label.textContent = "Überzogen";
+        sub.textContent = "Redezeit überschritten";
+      } else {
+        box.classList.remove("over");
+        label.textContent = "Redezeit";
+        sub.textContent = latestState.running ? "läuft" : "pausiert / bereit";
+      }
+    }
+
+    ensureState().then(() => {
+      refForRoom().on("value", snap => {
+        latestState = snap.val() || defaultState();
+        render();
+      });
+    });
+
+    setInterval(render, 250);
+  </script>
+</body>
+</html>
